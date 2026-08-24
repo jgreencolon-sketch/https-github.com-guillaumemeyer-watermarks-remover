@@ -1,0 +1,59 @@
+name: Test and publish container
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE_NAME: ghcr.io/jgreencolon-sketch/remove-ai-marks-service
+
+jobs:
+  test-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Build container
+        run: docker build --tag remove-ai-marks-service:test .
+
+      - name: Smoke-test container
+        run: |
+          docker run --detach --name remove-ai-marks-service --publish 8765:8765 remove-ai-marks-service:test
+          for attempt in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:8765/health; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs remove-ai-marks-service
+          exit 1
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish container
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
