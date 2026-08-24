@@ -1,0 +1,9 @@
+.git
+.github
+__pycache__
+*.py[cod]
+tests
+*.png
+*.jpg
+*.jpeg
+*.webp
